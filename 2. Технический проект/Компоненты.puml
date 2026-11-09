@@ -1,0 +1,85 @@
+@startuml Sport Statistics - C4 Components
+
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+!define ICONURL https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/v2.4.0
+!includeurl ICONURL/common.puml
+!includeurl ICONURL/devicons2/react_original.puml
+!includeurl ICONURL/devicons2/csharp.puml
+!includeurl ICONURL/devicons2/dotnetcore.puml
+!includeurl ICONURL/devicons2/postgresql.puml
+!includeurl ICONURL/devicons2/redis.puml
+!includeurl ICONURL/devicons2/amazonwebservices_original.puml
+
+title Спортивная статистика - компоненты Backend API и Live Gateway
+
+LAYOUT_LEFT_RIGHT()
+skinparam wrapWidth 220
+skinparam wrapMessageWidth 190
+skinparam defaultFontName Arial
+
+Container(web, "Веб-приложение", "React, TypeScript", "Пользовательский интерфейс.", $sprite="react_original")
+System_Ext(sportsProvider, "Внешние спортивные базы", "Передают и предоставляют спортивные данные.")
+System_Ext(identityProvider, "Поставщик идентификации", "OIDC/OAuth 2.0.")
+
+Container_Boundary(apiBoundary, "Backend API и Live Gateway [ASP.NET Core, .NET 10]") {
+    Component(restApi, "REST API", "ASP.NET Core Controllers", "Версионированные HTTP endpoints, валидация запросов и единый формат ошибок.", $sprite="csharp")
+    Component(authz, "Компонент безопасности", "OIDC middleware + authorization policies", "Проверяет токены, scopes, роли и доступ к конкретному ресурсу.", $sprite="csharp")
+
+    Component(competitions, "Модуль соревнований", "C# Domain/Application", "Управляет видами спорта, лигами, турнирами, сезонами, матчами, командами и составами.", $sprite="csharp")
+    Component(eventIngestion, "Модуль приёма событий", "C# Domain/Application", "Проверяет, дедуплицирует и регистрирует события матча и корректировки.", $sprite="csharp")
+    Component(statistics, "Модуль статистики", "C# Domain/Application", "Отдаёт индивидуальные и командные показатели, фильтры и сравнения.", $sprite="csharp")
+    Component(analytics, "Модуль аналитики и отчётов", "C# Application", "Запускает отчёты, инфографику и версионированные прогнозы.", $sprite="csharp")
+    Component(media, "Модуль медиа", "C# Application", "Управляет метаданными видеомоментов и выдаёт подписанные URL.", $sprite="csharp")
+    Component(integrations, "Интеграционные адаптеры", "C# Adapters", "Преобразуют форматы поставщиков во внутренние команды и события.", $sprite="csharp")
+
+    Component(outbox, "Transactional Outbox", "EF Core interceptor + publisher contract", "Записывает интеграционные события в той же транзакции, что и доменные изменения.", $sprite="csharp")
+    Component(liveSubscriber, "Подписчик live-событий", "RabbitMQ consumer", "Получает обновления статистики, проверяет версию и передаёт их в SignalR Hub.", $sprite="csharp")
+    Component(liveHub, "Live Hub", "ASP.NET Core SignalR", "Управляет подписками на матчи и отправляет клиентам компактные обновления.", $sprite="csharp")
+}
+
+Container(worker, "Фоновые обработчики", ".NET 10 Worker", "Публикуют Outbox, импортируют данные, пересчитывают агрегаты и выполняют длительные задания.", $sprite="dotnetcore")
+ContainerDb(database, "Основная база данных", "PostgreSQL", "Схемы модулей, аудит, агрегаты и Outbox.", $sprite="postgresql")
+ContainerDb(cache, "Распределённый кеш", "Redis", "Горячие представления и backplane.", $sprite="redis")
+ContainerQueue(broker, "Брокер сообщений", "RabbitMQ", "Внутренние события и задания.")
+ContainerDb(objectStorage, "Объектное хранилище", "S3 API", "Видео и сформированные файлы.", $sprite="amazonwebservices_original")
+
+Rel(web, restApi, "Выполняет команды и запросы", "HTTPS/JSON")
+Rel(web, liveHub, "Подписывается на матчи", "WSS/SignalR")
+Rel(sportsProvider, integrations, "Передаёт события", "Webhooks/REST, HTTPS")
+
+Rel(restApi, authz, "Проверяет полномочия")
+Rel(authz, identityProvider, "Проверяет issuer, audience, подпись и срок токена", "OIDC/OAuth 2.0, HTTPS")
+
+Rel(restApi, competitions, "Управляет турнирами и матчами")
+Rel(restApi, eventIngestion, "Регистрирует и корректирует события")
+Rel(restApi, statistics, "Запрашивает показатели и сравнения")
+Rel(restApi, analytics, "Запускает отчёты и прогнозы")
+Rel(restApi, media, "Управляет видеомоментами")
+
+Rel(integrations, competitions, "Синхронизирует справочники и расписания")
+Rel(integrations, eventIngestion, "Передаёт нормализованные события")
+Rel(eventIngestion, competitions, "Проверяет матч и его состояние")
+
+Rel(competitions, outbox, "Записывает события изменений")
+Rel(eventIngestion, outbox, "Записывает принятые события")
+Rel(analytics, outbox, "Создаёт длительные задания")
+
+Rel(competitions, database, "Читает и сохраняет свою схему", "SQL/TCP, TLS")
+Rel(eventIngestion, database, "Сохраняет факты, версии и аудит", "SQL/TCP, TLS")
+Rel(statistics, database, "Читает агрегаты и исторические данные", "SQL/TCP, TLS")
+Rel(statistics, cache, "Использует Cache-Aside", "RESP/TCP, TLS")
+Rel(analytics, database, "Читает данные и сохраняет задания", "SQL/TCP, TLS")
+Rel(media, database, "Сохраняет метаданные", "SQL/TCP, TLS")
+Rel(media, objectStorage, "Выдаёт подписанные URL", "S3 API, HTTPS")
+Rel(outbox, database, "Сохраняет сообщение атомарно", "SQL/TCP, TLS")
+
+Rel(worker, database, "Читает Outbox и сохраняет результаты", "SQL/TCP, TLS")
+Rel(worker, broker, "Публикует и обрабатывает сообщения", "AMQP 0-9-1, TLS")
+Rel(liveSubscriber, broker, "Получает обработанные live-события", "AMQP 0-9-1, TLS")
+Rel(liveSubscriber, liveHub, "Передаёт обновление нужной группе")
+
+SHOW_LEGEND()
+
+@enduml
+

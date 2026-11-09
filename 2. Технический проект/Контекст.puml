@@ -1,0 +1,41 @@
+@startuml Sport Statistics - C4 Context
+
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title Спортивная статистика - C4 Context
+
+LAYOUT_LEFT_RIGHT()
+skinparam wrapWidth 220
+skinparam wrapMessageWidth 180
+skinparam defaultFontName Arial
+
+Person(analyst, "Спортивный аналитик", "Сравнивает команды и игроков, выявляет закономерности и строит прогнозы.")
+Person(coach, "Тренер", "Анализирует свою команду, игроков и соперников.")
+Person(player, "Игрок", "Отслеживает показатели, прогресс и видеомоменты.")
+Person(fan, "Фанат", "Изучает результаты и создаёт инфографику.")
+
+System(sportStats, "Спортивная статистика", "Собирает, проверяет, хранит и анализирует данные матчей; предоставляет live-табло, отчёты, видео и прогнозы.")
+
+Person(journalist, "Журналист", "Получает проверенные данные для обзоров и прогнозов.")
+Person(organizer, "Организатор турнира", "Управляет соревнованиями и публикует актуальное табло.")
+Person(operator, "Оператор данных / администратор", "Вводит и исправляет данные, управляет доступом и интеграциями.")
+
+System_Ext(sportsProvider, "Внешние спортивные базы", "Предоставляют расписания, составы, результаты и события матчей.")
+System_Ext(identityProvider, "Поставщик идентификации", "Аутентифицирует пользователей и выдаёт стандартные токены доступа.")
+
+Rel(analyst, sportStats, "Исследует и сравнивает статистику", "HTTPS")
+Rel(coach, sportStats, "Анализирует игроков и команды", "HTTPS")
+Rel(player, sportStats, "Просматривает показатели и видео", "HTTPS")
+Rel(fan, sportStats, "Просматривает результаты и инфографику", "HTTPS")
+Rel(journalist, sportStats, "Формирует обзоры и прогнозы", "HTTPS")
+Rel(organizer, sportStats, "Ведёт турнир и онлайн-табло", "HTTPS")
+Rel(operator, sportStats, "Вводит, проверяет и корректирует данные", "HTTPS")
+
+Rel(sportsProvider, sportStats, "Передаёт спортивные данные", "REST/Webhooks, HTTPS")
+Rel(sportStats, sportsProvider, "Запрашивает расписания и результаты", "REST, HTTPS")
+Rel(sportStats, identityProvider, "Делегирует вход и проверку личности", "OIDC/OAuth 2.0, HTTPS")
+
+SHOW_LEGEND()
+
+@enduml
+

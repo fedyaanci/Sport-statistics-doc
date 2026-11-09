@@ -1,0 +1,69 @@
+@startuml Sport Statistics - C4 Containers
+
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+!define ICONURL https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/v2.4.0
+!includeurl ICONURL/common.puml
+!includeurl ICONURL/devicons2/react_original.puml
+!includeurl ICONURL/devicons2/csharp.puml
+!includeurl ICONURL/devicons2/dotnetcore.puml
+!includeurl ICONURL/devicons2/postgresql.puml
+!includeurl ICONURL/devicons2/redis.puml
+!includeurl ICONURL/devicons2/amazonwebservices_original.puml
+
+title Спортивная статистика - C4 Container
+
+LAYOUT_LEFT_RIGHT()
+skinparam wrapWidth 220
+skinparam wrapMessageWidth 190
+skinparam defaultFontName Arial
+
+Person(viewer, "Пользователь статистики", "Игрок, фанат или журналист: просматривает статистику, сравнения, видео и отчёты.")
+Person(expert, "Профессиональный пользователь", "Тренер, аналитик или организатор: анализирует и управляет соревнованиями.")
+Person(operator, "Оператор / администратор", "Вводит и исправляет данные, управляет справочниками и доступом.")
+
+System_Ext(sportsProvider, "Внешние спортивные базы", "Источники расписаний, составов, результатов и событий.")
+System_Ext(identityProvider, "Поставщик идентификации", "OpenID Connect провайдер, например Keycloak.")
+
+System_Boundary(sportStatsBoundary, "Система «Спортивная статистика»") {
+    Container(web, "Веб-приложение", "React, TypeScript", "Адаптивный интерфейс статистики, сравнения, табло, отчётов и администрирования.", $sprite="react_original")
+
+    Container(api, "Backend API и Live Gateway", "ASP.NET Core, .NET 10", "Модульный монолит: HTTP API, бизнес-правила, авторизация и доставка live-обновлений через SignalR.", $sprite="csharp")
+
+    Container(worker, "Фоновые обработчики", ".NET 10 Worker", "Импортирует данные, публикует Outbox, пересчитывает агрегаты, формирует отчёты, прогнозы и обрабатывает видео.", $sprite="dotnetcore")
+
+    ContainerDb(database, "Основная база данных", "PostgreSQL", "Матчи, события, статистические факты, агрегаты, аудит и Outbox; отдельные схемы модулей.", $sprite="postgresql")
+
+    ContainerDb(cache, "Распределённый кеш", "Redis", "Горячие представления статистики, rate limiting и backplane live-соединений. Не является источником истины.", $sprite="redis")
+
+    ContainerQueue(broker, "Брокер сообщений", "RabbitMQ", "Очереди фоновых задач и доставка внутренних событий как минимум один раз.")
+
+    ContainerDb(objectStorage, "Объектное хранилище", "S3-совместимое хранилище", "Видеомоменты, превью и сформированные файлы отчётов.", $sprite="amazonwebservices_original")
+}
+
+Rel(viewer, web, "Просматривает статистику и материалы", "HTTPS")
+Rel(expert, web, "Анализирует и управляет соревнованиями", "HTTPS")
+Rel(operator, web, "Вводит и корректирует данные", "HTTPS")
+
+Rel(web, api, "Вызывает API и получает live-обновления", "HTTPS/JSON; WSS/SignalR")
+Rel(web, identityProvider, "Выполняет вход", "OIDC Authorization Code + PKCE, HTTPS")
+Rel(web, objectStorage, "Загружает и получает файлы по короткоживущей подписанной ссылке", "HTTPS")
+
+Rel(api, identityProvider, "Проверяет токены и получает метаданные", "OIDC/OAuth 2.0, HTTPS")
+Rel(api, database, "Читает и изменяет доменные данные и Outbox", "SQL/TCP, TLS")
+Rel(api, cache, "Читает и инвалидирует кеш; использует backplane", "RESP/TCP, TLS")
+Rel(api, broker, "Получает события для live-рассылки", "AMQP 0-9-1, TLS")
+Rel(api, objectStorage, "Создаёт подписанные ссылки и проверяет метаданные объектов", "S3 API, HTTPS")
+
+Rel(worker, database, "Читает Outbox, выполняет пересчёт и сохраняет результаты", "SQL/TCP, TLS")
+Rel(worker, broker, "Публикует события и обрабатывает задания", "AMQP 0-9-1, TLS")
+Rel(worker, cache, "Инвалидирует изменившиеся представления", "RESP/TCP, TLS")
+Rel(worker, objectStorage, "Обрабатывает видео и формирует файлы", "S3 API, HTTPS")
+
+Rel(sportsProvider, api, "Отправляет события и результаты", "Webhooks/REST, HTTPS")
+Rel(worker, sportsProvider, "Периодически импортирует данные", "REST, HTTPS")
+
+SHOW_LEGEND()
+
+@enduml
+
